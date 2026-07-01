@@ -102,7 +102,7 @@ Combined dashboard export:
 The dashboard shows:
 
 * repository overview and per-repo summary metrics
-* issue health metrics (closure rate, stale issues, median resolution time)
+* issue health metrics (closure rate, stale issues, median resolution time, label distribution)
 * pull-request merge rate
 * commit activity and monthly commit trends
 * contributor concentration and top contributors
@@ -117,7 +117,11 @@ Command:
 pytest
 ```
 
-Expected result: all unit tests pass (config parsing, ingestion helpers, issue metrics, PR/commit/contributor/release metrics).
+Screenshot:
+
+![Pytest output](pytest_result.png)
+
+Expected result: all unit tests pass (config parsing, ingestion helpers, issue metrics, PR/commit/contributor/release metrics, label distribution).
 
 ## Checkpoint 2 coverage summary
 
@@ -129,12 +133,13 @@ Expected result: all unit tests pass (config parsing, ingestion helpers, issue m
 | Caching / incremental sync | `GitHubClient`, `ingest_issues()`, `ingest_commits()` |
 | Repository metadata ingestion | verify script output |
 | Issue ingestion + metrics | dashboard issues tab + `/metrics/issues` |
+| Issue label distribution | dashboard issues tab + `/metrics/labels/{owner}/{repo}` |
 | Pull-request ingestion + merge rate | dashboard pull requests tab + `/metrics/pull-requests` |
 | Commit ingestion + activity metrics | dashboard commits tab + `/metrics/commits` |
 | Contributor ingestion + concentration | dashboard contributors tab + `/metrics/contributors` |
 | Release ingestion + frequency metrics | dashboard releases tab + `/metrics/releases` |
 | Cross-repository comparison | dashboard compare tab + `/metrics/comparison` |
-| Unit tests | `pytest` (14 tests) |
+| Unit tests | `pytest` (15 tests) + `pytest_result.png` |
 
 ## Planned for Checkpoint 3
 

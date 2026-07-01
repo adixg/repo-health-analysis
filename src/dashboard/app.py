@@ -25,6 +25,8 @@ from src.analytics.health_metrics import (
 from src.analytics.metrics import (
     calculate_all_issue_metrics,
     calculate_issue_metrics,
+    calculate_label_distribution,
+    label_distribution_as_rows,
     summarize_all_repositories,
     top_stale_issues,
 )
@@ -95,6 +97,17 @@ try:
                 if stale_chart:
                     st.subheader("Stale open issues by repository")
                     st.bar_chart(stale_chart)
+
+                label_distribution = calculate_label_distribution(session, repository)
+                label_rows = label_distribution_as_rows(label_distribution)
+                if label_rows:
+                    st.subheader(f"Issue label distribution — {selected_repo}")
+                    st.caption(
+                        f"{label_distribution.labeled_issues} labeled issues, "
+                        f"{label_distribution.unlabeled_issues} without labels"
+                    )
+                    st.dataframe(label_rows, width="stretch")
+                    st.bar_chart({row["label"]: row["count"] for row in label_rows})
 
         with prs_tab:
             pr_metrics = calculate_all_pull_request_metrics(session)

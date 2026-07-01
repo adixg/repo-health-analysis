@@ -332,21 +332,20 @@ The project is in **Checkpoint 2** with a working ingestion → storage → metr
 * issue, pull-request, commit, contributor, and release ingestion,
 * pagination, local response caching, and incremental sync where supported,
 * PostgreSQL schema via SQLAlchemy (`repositories`, `issues`, `pull_requests`, `commits`, `contributors`, `releases`),
-* issue metrics: open/closed counts, closure rate, stale issues (90+ days), median resolution time,
+* issue metrics: open/closed counts, closure rate, stale issues (90+ days), median resolution time, label distribution,
 * pull-request metrics: merge rate, median merge time,
 * commit metrics: 6-month activity, monthly commit trends,
 * contributor metrics: contributor count, top-contributor concentration,
 * release metrics: release count, releases in last 12 months, days since last release,
 * multi-tab Streamlit dashboard (Overview, Issues, Pull Requests, Commits, Contributors, Releases, Compare),
 * FastAPI service with health, repository, and metrics endpoints,
-* setup script (`scripts/verify_setup.py`) and unit tests (`pytest`, 14 tests),
+* setup script (`scripts/verify_setup.py`) and unit tests (`pytest`, 15 tests),
 * Phase 1 evaluation repos: `octocat/Hello-World`, `fastai/fastai`, `explosion/spaCy`, `psf/requests`,
 * Checkpoint 2 evidence artifacts in `docs/` (setup output, PostgreSQL screenshot, dashboard PDFs).
 
 ### Remaining before Checkpoint 3
 
 * issue comments, PR comments, README/documentation ingestion,
-* label and issue-category distribution analytics,
 * median PR review time (requires review-event ingestion),
 * exploratory correlation analysis across repositories,
 * MCP tools, Ollama integration, and semantic retrieval,
@@ -406,6 +405,7 @@ uvicorn src.api.main:app --reload
 Metrics endpoints:
 
 * `GET /metrics/issues`
+* `GET /metrics/labels/{owner}/{repo}`
 * `GET /metrics/pull-requests`
 * `GET /metrics/commits`
 * `GET /metrics/contributors`
@@ -422,6 +422,7 @@ Evidence artifacts in `docs/`:
 |----------|-------------|
 | `verify_script_output.png` | Output from `python scripts/verify_setup.py` |
 | `postgresql_output.png` | SQL query results from pgAdmin |
+| `pytest_result.png` | Output from `pytest` |
 | `dashboard_output_overview.pdf` | Dashboard overview tab |
 | `dashboard_output_issues.pdf` | Issue metrics tab |
 | `dashboard_output_pull_requests.pdf` | Pull-request metrics tab |

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from statistics import median
@@ -31,6 +32,22 @@ class IssueMetrics:
     stale_open_issues: int
     stale_issue_pct: float
     median_resolution_days: float | None
+
+
+@dataclass
+class LabelCount:
+    label: str
+    count: int
+    share: float
+
+
+@dataclass
+class LabelDistribution:
+    full_name: str
+    total_issues: int
+    labeled_issues: int
+    unlabeled_issues: int
+    top_labels: list[LabelCount]
 
 
 def summarize_repository(repository: Repository) -> RepositoryHealthSummary:
@@ -94,11 +111,6 @@ def calculate_issue_metrics(
     )
 
 
-def calculate_all_issue_metrics(session: Session) -> list[dict]:
-    repositories = session.scalars(select(Repository).order_by(Repository.full_name)).all()
-    return [asdict(calculate_issue_metrics(session, repo)) for repo in repositories]
-
-
 def top_stale_issues(session: Session, repository_id: int, limit: int = 10) -> list[dict]:
     cutoff = datetime.now(UTC) - timedelta(days=get_settings().stale_issue_days)
     issues = session.scalars(
@@ -120,4 +132,59 @@ def top_stale_issues(session: Session, repository_id: int, limit: int = 10) -> l
             "url": issue.html_url,
         }
         for issue in issues
+    ]
+
+
+def calculate_all_issue_metrics(session: Session) -> list[dict]:
+    repositories = session.scalars(select(Repository).order_by(Repository.full_name)).all()
+    return [asdict(calculate_issue_metrics(session, repo)) for repo in repositories]
+
+
+def calculate_label_distribution(
+    session: Session,
+    repository: Repository,
+    *,
+    limit: int = 15,
+) -> LabelDistribution:
+    """Count how often each issue label appears for a repository."""
+    issues = session.scalars(
+        select(Issue).where(Issue.repository_id == repository.id)
+    ).all()
+
+    label_counts: Counter[str] = Counter()
+    labeled_issues = 0
+    for issue in issues:
+        labels = issue.labels or []
+        if not labels:
+            continue
+        labeled_issues += 1
+        label_counts.update(labels)
+
+    total_assignments = sum(label_counts.values())
+    top_labels = [
+        LabelCount(
+            label=label,
+            count=count,
+            share=round(count / total_assignments, 3) if total_assignments else 0.0,
+        )
+        for label, count in label_counts.most_common(limit)
+    ]
+
+    return LabelDistribution(
+        full_name=repository.full_name,
+        total_issues=len(issues),
+        labeled_issues=labeled_issues,
+        unlabeled_issues=len(issues) - labeled_issues,
+        top_labels=top_labels,
+    )
+
+
+def label_distribution_as_rows(distribution: LabelDistribution) -> list[dict]:
+    return [
+        {
+            "label": label.label,
+            "count": label.count,
+            "share": label.share,
+        }
+        for label in distribution.top_labels
     ]
