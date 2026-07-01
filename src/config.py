@@ -26,15 +26,21 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     cache_dir: Path = Path("data/cache")
     sample_repos: str = ""
+    ingestion_max_pages: int | None = None
     issues_max_pages: int | None = None
     stale_issue_days: int = 90
 
-    @field_validator("issues_max_pages", mode="before")
+    @field_validator("ingestion_max_pages", "issues_max_pages", mode="before")
     @classmethod
-    def empty_issues_max_pages_is_none(cls, value: Any) -> Any:
+    def empty_max_pages_is_none(cls, value: Any) -> Any:
         if value == "" or value is None:
             return None
         return value
+
+    def resolved_ingestion_max_pages(self) -> int | None:
+        if self.ingestion_max_pages is not None:
+            return self.ingestion_max_pages
+        return self.issues_max_pages
 
     @computed_field
     @property

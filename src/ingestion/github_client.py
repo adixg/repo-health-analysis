@@ -112,6 +112,62 @@ class GitHubClient:
             max_pages=max_pages,
         )
 
+    def list_pull_requests(
+        self,
+        owner: str,
+        repo: str,
+        *,
+        state: str = "all",
+        max_pages: int | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        yield from self.paginate(
+            f"repos/{owner}/{repo}/pulls",
+            params={"state": state, "sort": "updated", "direction": "asc"},
+            max_pages=max_pages,
+        )
+
+    def list_commits(
+        self,
+        owner: str,
+        repo: str,
+        *,
+        since: str | None = None,
+        max_pages: int | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        params: dict[str, Any] = {}
+        if since:
+            params["since"] = since
+        yield from self.paginate(
+            f"repos/{owner}/{repo}/commits",
+            params=params,
+            max_pages=max_pages,
+        )
+
+    def list_contributors(
+        self,
+        owner: str,
+        repo: str,
+        *,
+        max_pages: int | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        yield from self.paginate(
+            f"repos/{owner}/{repo}/contributors",
+            params={"anon": "false"},
+            max_pages=max_pages,
+        )
+
+    def list_releases(
+        self,
+        owner: str,
+        repo: str,
+        *,
+        max_pages: int | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        yield from self.paginate(
+            f"repos/{owner}/{repo}/releases",
+            max_pages=max_pages,
+        )
+
     def verify_authentication(self) -> dict[str, Any]:
         """Return the authenticated user profile; raises if the token is invalid."""
         return self.get("/user", use_cache=False)

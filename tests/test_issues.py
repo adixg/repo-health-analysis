@@ -1,7 +1,6 @@
-from datetime import UTC, datetime, timedelta
-
 from src.ingestion.issues import is_pull_request
 from src.ingestion.utils import parse_github_datetime
+from datetime import UTC, datetime
 
 
 def test_parse_github_datetime() -> None:

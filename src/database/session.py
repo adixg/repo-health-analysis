@@ -30,13 +30,20 @@ def get_session_factory() -> sessionmaker[Session]:
 def init_db() -> None:
     engine = get_engine()
     Base.metadata.create_all(bind=engine)
+    repository_sync_columns = (
+        "issues_last_synced_at",
+        "pulls_last_synced_at",
+        "commits_last_synced_at",
+        "contributors_last_synced_at",
+        "releases_last_synced_at",
+    )
     with engine.begin() as conn:
-        conn.execute(
-            text(
-                "ALTER TABLE repositories "
-                "ADD COLUMN IF NOT EXISTS issues_last_synced_at TIMESTAMPTZ"
+        for column in repository_sync_columns:
+            conn.execute(
+                text(
+                    f"ALTER TABLE repositories ADD COLUMN IF NOT EXISTS {column} TIMESTAMPTZ"
+                )
             )
-        )
         conn.execute(text("ALTER TABLE repositories ALTER COLUMN id TYPE BIGINT"))
         issues_table = conn.execute(
             text("SELECT to_regclass('public.issues') IS NOT NULL")

@@ -295,7 +295,7 @@ What evidence supports the repository-health assessment?
 * build initial dashboard views,
 * add unit tests.
 
-**Progress:** in progress — repository and issue ingestion, PostgreSQL storage, initial issue metrics, Streamlit dashboard, FastAPI endpoints, and unit tests are implemented locally. Pull requests, commits, contributors, and release ingestion remain open.
+**Progress:** substantially complete — repository, issue, pull-request, commit, contributor, and release ingestion are implemented, along with PostgreSQL storage, health metrics, a multi-tab Streamlit dashboard, FastAPI endpoints, unit tests, and Checkpoint 2 evidence artifacts in `docs/`.
 
 ### Checkpoint 3: MCP, Local LLM, and Final Evaluation
 
@@ -311,7 +311,7 @@ What evidence supports the repository-health assessment?
 
 ## Current Status
 
-The project has moved from planning into **Checkpoint 2 implementation**. The core ingestion → storage → metrics pipeline is working on real public repositories.
+The project is in **Checkpoint 2** with a working ingestion → storage → metrics → dashboard pipeline on real public repositories. Evidence screenshots and PDFs are available in [docs/checkpoint2-evidence.md](docs/checkpoint2-evidence.md).
 
 ### Completed
 
@@ -325,33 +325,32 @@ The project has moved from planning into **Checkpoint 2 implementation**. The co
 * risks and limitations documented,
 * public GitHub repository created.
 
-**Checkpoint 2 (partial)**
+**Checkpoint 2**
 
 * authenticated GitHub REST API access (`GitHubClient`, token via `.env`),
 * repository metadata ingestion for multiple repos,
-* issue ingestion with pagination, local response caching, and incremental sync,
-* PostgreSQL schema (`repositories`, `issues`) via SQLAlchemy,
-* initial issue-health metrics: open/closed counts, closure rate, stale issues (90+ days), median resolution time,
-* Streamlit dashboard with repository overview and issue metrics,
-* FastAPI service with `/health`, `/repositories`, and `/metrics/issues`,
-* setup script (`scripts/verify_setup.py`) and unit tests (`pytest`, 7 tests),
-* Phase 1 evaluation repos configured: `octocat/Hello-World`, `fastai/fastai`, `explosion/spaCy`, `psf/requests`.
+* issue, pull-request, commit, contributor, and release ingestion,
+* pagination, local response caching, and incremental sync where supported,
+* PostgreSQL schema via SQLAlchemy (`repositories`, `issues`, `pull_requests`, `commits`, `contributors`, `releases`),
+* issue metrics: open/closed counts, closure rate, stale issues (90+ days), median resolution time,
+* pull-request metrics: merge rate, median merge time,
+* commit metrics: 6-month activity, monthly commit trends,
+* contributor metrics: contributor count, top-contributor concentration,
+* release metrics: release count, releases in last 12 months, days since last release,
+* multi-tab Streamlit dashboard (Overview, Issues, Pull Requests, Commits, Contributors, Releases, Compare),
+* FastAPI service with health, repository, and metrics endpoints,
+* setup script (`scripts/verify_setup.py`) and unit tests (`pytest`, 14 tests),
+* Phase 1 evaluation repos: `octocat/Hello-World`, `fastai/fastai`, `explosion/spaCy`, `psf/requests`,
+* Checkpoint 2 evidence artifacts in `docs/` (setup output, PostgreSQL screenshot, dashboard PDFs).
 
-### In progress / next
+### Remaining before Checkpoint 3
 
-* pull-request ingestion and PR merge rate,
-* commit and contributor ingestion,
-* monthly commit activity charts,
-* release frequency metrics,
-* richer dashboard views and repository comparison,
-* additional tests and checkpoint evidence documentation.
-
-### Planned for Checkpoint 3
-
-* MCP tool servers,
-* Ollama integration and semantic retrieval,
-* cross-repository correlation analysis,
-* report export and full system containerization.
+* issue comments, PR comments, README/documentation ingestion,
+* label and issue-category distribution analytics,
+* median PR review time (requires review-event ingestion),
+* exploratory correlation analysis across repositories,
+* MCP tools, Ollama integration, and semantic retrieval,
+* exportable report generation and full Docker containerization.
 
 ## Getting Started
 
@@ -404,23 +403,53 @@ Optional API:
 uvicorn src.api.main:app --reload
 ```
 
+Metrics endpoints:
+
+* `GET /metrics/issues`
+* `GET /metrics/pull-requests`
+* `GET /metrics/commits`
+* `GET /metrics/contributors`
+* `GET /metrics/releases`
+* `GET /metrics/comparison`
+
 ### Reproducible evidence
+
+See [docs/checkpoint2-evidence.md](docs/checkpoint2-evidence.md) for Checkpoint 2 reproduction steps, screenshots, SQL queries, and dashboard PDFs.
+
+Evidence artifacts in `docs/`:
+
+| Artifact | Description |
+|----------|-------------|
+| `verify_script_output.png` | Output from `python scripts/verify_setup.py` |
+| `postgresql_output.png` | SQL query results from pgAdmin |
+| `dashboard_output_overview.pdf` | Dashboard overview tab |
+| `dashboard_output_issues.pdf` | Issue metrics tab |
+| `dashboard_output_pull_requests.pdf` | Pull-request metrics tab |
+| `dashboard_output_commits.pdf` | Commit activity tab |
+| `dashboard_output_contributors.pdf` | Contributor metrics tab |
+| `dashboard_output_releases.pdf` | Release metrics tab |
+| `dashboard_output_compare.pdf` | Cross-repository comparison tab |
+| `dashboard_output.pdf` | Combined dashboard export |
 
 After a successful run of `verify_setup.py`, you should see:
 
 * authenticated GitHub user printed to the console,
 * PostgreSQL tables created,
 * multiple repositories ingested,
-* issue counts synced per repository.
+* issue, pull-request, commit, contributor, and release counts synced per repository.
 
 Example SQL check:
 
 ```sql
-SELECT r.full_name, COUNT(i.id) AS issue_count
+SELECT
+  r.full_name,
+  (SELECT COUNT(*) FROM issues i WHERE i.repository_id = r.id) AS issues,
+  (SELECT COUNT(*) FROM pull_requests p WHERE p.repository_id = r.id) AS pull_requests,
+  (SELECT COUNT(*) FROM commits c WHERE c.repository_id = r.id) AS commits,
+  (SELECT COUNT(*) FROM contributors c WHERE c.repository_id = r.id) AS contributors,
+  (SELECT COUNT(*) FROM releases rel WHERE rel.repository_id = r.id) AS releases
 FROM repositories r
-LEFT JOIN issues i ON i.repository_id = r.id
-GROUP BY r.full_name
-ORDER BY issue_count DESC;
+ORDER BY r.full_name;
 ```
 
 ## Repository Structure
@@ -439,16 +468,16 @@ repo-health-analysis/
 │   └── run_dashboard.py
 ├── src/
 │   ├── config.py
-│   ├── ingestion/          # GitHub client, repo + issue ingest
+│   ├── ingestion/          # GitHub client + repo/issue/PR/commit/contributor/release ingest
 │   ├── database/           # SQLAlchemy models and session
-│   ├── analytics/          # Issue health metrics
+│   ├── analytics/          # Issue + repository health metrics
 │   ├── retrieval/          # placeholder (Checkpoint 3)
 │   ├── mcp_servers/        # placeholder (Checkpoint 3)
 │   ├── api/                # FastAPI service
 │   └── dashboard/          # Streamlit app
 ├── tests/
 ├── data/                   # local API cache (gitignored contents)
-├── docs/
+├── docs/                   # checkpoint evidence, screenshots, dashboard PDFs
 └── outputs/
 ```
 

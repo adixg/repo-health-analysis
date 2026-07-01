@@ -1,13 +1,29 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
+from src.config import Settings, get_settings
 from src.database.models import Repository
+from src.ingestion.commits import ingest_commits
+from src.ingestion.contributors import ingest_contributors
 from src.ingestion.github_client import GitHubClient
+from src.ingestion.issues import ingest_issues
+from src.ingestion.pull_requests import ingest_pull_requests
+from src.ingestion.releases import ingest_releases
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class IngestionCounts:
+    issues: int = 0
+    pull_requests: int = 0
+    commits: int = 0
+    contributors: int = 0
+    releases: int = 0
 
 
 def parse_repo_slug(slug: str) -> tuple[str, str]:
@@ -45,3 +61,22 @@ def ingest_repository(session: Session, slug: str, client: GitHubClient | None =
     session.refresh(repository)
     logger.info("Ingested repository %s", repository.full_name)
     return repository
+
+
+def ingest_repository_data(
+    session: Session,
+    repository: Repository,
+    client: GitHubClient | None = None,
+    settings: Settings | None = None,
+) -> IngestionCounts:
+    """Ingest all supported GitHub data types for a repository."""
+    client = client or GitHubClient()
+    settings = settings or get_settings()
+
+    return IngestionCounts(
+        issues=ingest_issues(session, repository, client=client, settings=settings),
+        pull_requests=ingest_pull_requests(session, repository, client=client, settings=settings),
+        commits=ingest_commits(session, repository, client=client, settings=settings),
+        contributors=ingest_contributors(session, repository, client=client, settings=settings),
+        releases=ingest_releases(session, repository, client=client, settings=settings),
+    )
