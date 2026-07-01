@@ -1,0 +1,1 @@
+"""GitHub repository data ingestion."""

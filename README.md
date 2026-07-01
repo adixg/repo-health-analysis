@@ -295,6 +295,8 @@ What evidence supports the repository-health assessment?
 * build initial dashboard views,
 * add unit tests.
 
+**Progress:** in progress — repository and issue ingestion, PostgreSQL storage, initial issue metrics, Streamlit dashboard, FastAPI endpoints, and unit tests are implemented locally. Pull requests, commits, contributors, and release ingestion remain open.
+
 ### Checkpoint 3: MCP, Local LLM, and Final Evaluation
 
 * implement MCP tools,
@@ -309,9 +311,11 @@ What evidence supports the repository-health assessment?
 
 ## Current Status
 
-The project is currently in the planning stage.
+The project has moved from planning into **Checkpoint 2 implementation**. The core ingestion → storage → metrics pipeline is working on real public repositories.
 
-Completed:
+### Completed
+
+**Checkpoint 1**
 
 * project idea selected,
 * project scope defined,
@@ -321,28 +325,129 @@ Completed:
 * risks and limitations documented,
 * public GitHub repository created.
 
-Implementation of the GitHub ingestion pipeline, database schema, analytics engine, MCP tools, and dashboard will begin during the next checkpoint.
+**Checkpoint 2 (partial)**
+
+* authenticated GitHub REST API access (`GitHubClient`, token via `.env`),
+* repository metadata ingestion for multiple repos,
+* issue ingestion with pagination, local response caching, and incremental sync,
+* PostgreSQL schema (`repositories`, `issues`) via SQLAlchemy,
+* initial issue-health metrics: open/closed counts, closure rate, stale issues (90+ days), median resolution time,
+* Streamlit dashboard with repository overview and issue metrics,
+* FastAPI service with `/health`, `/repositories`, and `/metrics/issues`,
+* setup script (`scripts/verify_setup.py`) and unit tests (`pytest`, 7 tests),
+* Phase 1 evaluation repos configured: `octocat/Hello-World`, `fastai/fastai`, `explosion/spaCy`, `psf/requests`.
+
+### In progress / next
+
+* pull-request ingestion and PR merge rate,
+* commit and contributor ingestion,
+* monthly commit activity charts,
+* release frequency metrics,
+* richer dashboard views and repository comparison,
+* additional tests and checkpoint evidence documentation.
+
+### Planned for Checkpoint 3
+
+* MCP tool servers,
+* Ollama integration and semantic retrieval,
+* cross-repository correlation analysis,
+* report export and full system containerization.
+
+## Getting Started
+
+### Prerequisites
+
+* Python 3.10+
+* PostgreSQL (local install or Docker Compose)
+* GitHub personal access token with `public_repo` scope
+
+### Setup
+
+```bash
+git clone https://github.com/adixg/repo-health-analysis.git
+cd repo-health-analysis
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+cp .env.example .env             # Windows: copy .env.example .env
+```
+
+Add your credentials to `.env`:
+
+```env
+GITHUB_TOKEN=your_token_here
+POSTGRES_USER=reposense
+POSTGRES_PASSWORD=reposense
+POSTGRES_DB=reposense
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+SAMPLE_REPOS=octocat/Hello-World,fastai/fastai,explosion/spaCy,psf/requests
+```
+
+Start PostgreSQL (if using Docker):
+
+```bash
+docker compose up -d
+```
+
+Run setup and ingestion:
+
+```bash
+python scripts/verify_setup.py
+pytest
+streamlit run src/dashboard/app.py
+```
+
+Optional API:
+
+```bash
+uvicorn src.api.main:app --reload
+```
+
+### Reproducible evidence
+
+After a successful run of `verify_setup.py`, you should see:
+
+* authenticated GitHub user printed to the console,
+* PostgreSQL tables created,
+* multiple repositories ingested,
+* issue counts synced per repository.
+
+Example SQL check:
+
+```sql
+SELECT r.full_name, COUNT(i.id) AS issue_count
+FROM repositories r
+LEFT JOIN issues i ON i.repository_id = r.id
+GROUP BY r.full_name
+ORDER BY issue_count DESC;
+```
 
 ## Repository Structure
 
-The planned repository structure is:
+The current repository structure is:
 
 ```text
 repo-health-analysis/
 ├── README.md
 ├── requirements.txt
+├── pyproject.toml
 ├── docker-compose.yml
 ├── .env.example
+├── scripts/
+│   ├── verify_setup.py
+│   └── run_dashboard.py
 ├── src/
-│   ├── ingestion/
-│   ├── database/
-│   ├── analytics/
-│   ├── retrieval/
-│   ├── mcp_servers/
-│   ├── api/
-│   └── dashboard/
+│   ├── config.py
+│   ├── ingestion/          # GitHub client, repo + issue ingest
+│   ├── database/           # SQLAlchemy models and session
+│   ├── analytics/          # Issue health metrics
+│   ├── retrieval/          # placeholder (Checkpoint 3)
+│   ├── mcp_servers/        # placeholder (Checkpoint 3)
+│   ├── api/                # FastAPI service
+│   └── dashboard/          # Streamlit app
 ├── tests/
-├── data/
+├── data/                   # local API cache (gitignored contents)
 ├── docs/
 └── outputs/
 ```
