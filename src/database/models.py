@@ -32,6 +32,8 @@ class Repository(Base):
     commits_last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     contributors_last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     releases_last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    comments_last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    documents_last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ingested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -173,5 +175,87 @@ class Release(Base):
     ingested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
+        nullable=False,
+    )
+
+
+class IssueComment(Base):
+    """Comment posted on an issue (Checkpoint 3 text ingestion)."""
+
+    __tablename__ = "issue_comments"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    repository_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("repositories.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    issue_number: Mapped[int | None] = mapped_column(Integer, index=True)
+    author_login: Mapped[str | None] = mapped_column(String(128))
+    body: Mapped[str | None] = mapped_column(Text)
+    html_url: Mapped[str | None] = mapped_column(String(512))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    raw_metadata: Mapped[dict | None] = mapped_column(JSONB)
+    ingested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+
+class PullRequestComment(Base):
+    """Review comment posted on a pull request (Checkpoint 3 text ingestion)."""
+
+    __tablename__ = "pull_request_comments"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    repository_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("repositories.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    pull_number: Mapped[int | None] = mapped_column(Integer, index=True)
+    author_login: Mapped[str | None] = mapped_column(String(128))
+    body: Mapped[str | None] = mapped_column(Text)
+    html_url: Mapped[str | None] = mapped_column(String(512))
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    raw_metadata: Mapped[dict | None] = mapped_column(JSONB)
+    ingested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+
+class Document(Base):
+    """Repository documentation (README / docs) for semantic retrieval (Checkpoint 3)."""
+
+    __tablename__ = "documents"
+    __table_args__ = (UniqueConstraint("repository_id", "path", name="uq_documents_repo_path"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    repository_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("repositories.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    path: Mapped[str] = mapped_column(String(512), nullable=False)
+    content: Mapped[str | None] = mapped_column(Text)
+    sha: Mapped[str | None] = mapped_column(String(64))
+    html_url: Mapped[str | None] = mapped_column(String(512))
+    ingested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
         nullable=False,
     )

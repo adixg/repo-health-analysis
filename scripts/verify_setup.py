@@ -66,6 +66,9 @@ def main() -> int:
             print(f"  OK — {counts.commits} commits synced")
             print(f"  OK — {counts.contributors} contributors synced")
             print(f"  OK — {counts.releases} releases synced")
+            print(f"  OK — {counts.issue_comments} issue comments synced")
+            print(f"  OK — {counts.pull_request_comments} pull-request comments synced")
+            print(f"  OK — {counts.documents} documents synced")
     finally:
         session.close()
 

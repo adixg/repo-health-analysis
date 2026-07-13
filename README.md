@@ -309,9 +309,11 @@ What evidence supports the repository-health assessment?
 * containerize the system,
 * prepare the final demonstration and report.
 
+**Progress:** substantially complete — issue/PR comments and README ingestion, TF-IDF semantic retrieval, grounded Ollama chat, MCP server tools, exploratory Spearman correlations, Markdown report export, Docker Compose (postgres + ollama + api + dashboard), and expanded unit tests are implemented. See [docs/checkpoint3.md](docs/checkpoint3.md).
+
 ## Current Status
 
-The project is in **Checkpoint 2** with a working ingestion → storage → metrics → dashboard pipeline on real public repositories. Evidence screenshots and PDFs are available in [docs/checkpoint2-evidence.md](docs/checkpoint2-evidence.md).
+The project is in **Checkpoint 3** with a working ingestion → storage → metrics → retrieval → grounded chat → report export pipeline on real public repositories. Evidence for earlier checkpoints remains in [docs/checkpoint2-evidence.md](docs/checkpoint2-evidence.md).
 
 ### Completed
 
@@ -343,13 +345,24 @@ The project is in **Checkpoint 2** with a working ingestion → storage → metr
 * Phase 1 evaluation repos: `octocat/Hello-World`, `fastai/fastai`, `explosion/spaCy`, `psf/requests`,
 * Checkpoint 2 evidence artifacts in `docs/` (setup output, PostgreSQL screenshot, dashboard PDFs).
 
-### Remaining before Checkpoint 3
+**Checkpoint 3**
 
-* issue comments, PR comments, README/documentation ingestion,
+* issue comments, PR comments, and README/documentation ingestion,
+* TF-IDF semantic retrieval over issues, comments, and docs (`src/retrieval/`),
+* grounded Ollama chat agent with evidence citations (`src/agent/grounded_chat.py`),
+* MCP tools for repository queries (`src/mcp_servers/server.py`),
+* exploratory Spearman/Pearson correlations (`src/analytics/correlation.py`),
+* exportable Markdown health reports (`src/reporting/report.py`),
+* dashboard Chat, Correlations, and Reports tabs,
+* FastAPI endpoints for correlations, reports, and grounded chat,
+* Docker Compose stack with Ollama service,
+* expanded unit tests (`pytest`, 30+ tests).
+
+### Remaining / optional
+
 * median PR review time (requires review-event ingestion),
-* exploratory correlation analysis across repositories,
-* MCP tools, Ollama integration, and semantic retrieval,
-* exportable report generation and full Docker containerization.
+* Checkpoint 3 evidence screenshots and final evaluation write-up,
+* full end-to-end demo with Ollama on all Phase 1 repos.
 
 ## Getting Started
 
@@ -358,6 +371,7 @@ The project is in **Checkpoint 2** with a working ingestion → storage → metr
 * Python 3.10+
 * PostgreSQL (local install or Docker Compose)
 * GitHub personal access token with `public_repo` scope
+* [Ollama](https://ollama.com/) for grounded chat (Checkpoint 3)
 
 ### Setup
 
@@ -380,6 +394,15 @@ POSTGRES_DB=reposense
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 SAMPLE_REPOS=octocat/Hello-World,fastai/fastai,explosion/spaCy,psf/requests
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:3b
+```
+
+Pull the local model (adjust to match your `.env`):
+
+```bash
+ollama pull qwen2.5:3b
+ollama serve
 ```
 
 Start PostgreSQL (if using Docker):
@@ -411,10 +434,19 @@ Metrics endpoints:
 * `GET /metrics/contributors`
 * `GET /metrics/releases`
 * `GET /metrics/comparison`
+* `GET /metrics/correlations?popularity=stars&method=spearman`
+* `GET /reports/{owner}/{repo}`
+* `POST /chat` — JSON body: `{"question": "...", "full_name": "owner/repo"}`
+
+Run the MCP server (stdio):
+
+```bash
+python -m src.mcp_servers.server
+```
 
 ### Reproducible evidence
 
-See [docs/checkpoint2-evidence.md](docs/checkpoint2-evidence.md) for Checkpoint 2 reproduction steps, screenshots, SQL queries, and dashboard PDFs.
+See [docs/checkpoint2-evidence.md](docs/checkpoint2-evidence.md) for Checkpoint 2 reproduction steps, screenshots, SQL queries, and dashboard PDFs. Checkpoint 3 architecture and verification steps are in [docs/checkpoint3.md](docs/checkpoint3.md).
 
 Evidence artifacts in `docs/`:
 
@@ -472,8 +504,10 @@ repo-health-analysis/
 │   ├── ingestion/          # GitHub client + repo/issue/PR/commit/contributor/release ingest
 │   ├── database/           # SQLAlchemy models and session
 │   ├── analytics/          # Issue + repository health metrics
-│   ├── retrieval/          # placeholder (Checkpoint 3)
-│   ├── mcp_servers/        # placeholder (Checkpoint 3)
+│   ├── agent/              # grounded Ollama chat (Checkpoint 3)
+│   ├── retrieval/          # TF-IDF semantic retrieval (Checkpoint 3)
+│   ├── mcp_servers/        # FastMCP tool server (Checkpoint 3)
+│   ├── reporting/          # Markdown health report export (Checkpoint 3)
 │   ├── api/                # FastAPI service
 │   └── dashboard/          # Streamlit app
 ├── tests/

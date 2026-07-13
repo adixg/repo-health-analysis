@@ -168,6 +168,50 @@ class GitHubClient:
             max_pages=max_pages,
         )
 
+    def list_issue_comments(
+        self,
+        owner: str,
+        repo: str,
+        *,
+        since: str | None = None,
+        max_pages: int | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        params: dict[str, Any] = {"sort": "created", "direction": "asc"}
+        if since:
+            params["since"] = since
+        yield from self.paginate(
+            f"repos/{owner}/{repo}/issues/comments",
+            params=params,
+            max_pages=max_pages,
+        )
+
+    def list_pull_request_comments(
+        self,
+        owner: str,
+        repo: str,
+        *,
+        since: str | None = None,
+        max_pages: int | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        params: dict[str, Any] = {"sort": "created", "direction": "asc"}
+        if since:
+            params["since"] = since
+        yield from self.paginate(
+            f"repos/{owner}/{repo}/pulls/comments",
+            params=params,
+            max_pages=max_pages,
+        )
+
+    def get_readme(self, owner: str, repo: str) -> dict[str, Any] | None:
+        """Return the repository README payload (base64 content), or None if absent."""
+        try:
+            return self.get(f"repos/{owner}/{repo}/readme")
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                logger.info("No README found for %s/%s", owner, repo)
+                return None
+            raise
+
     def verify_authentication(self) -> dict[str, Any]:
         """Return the authenticated user profile; raises if the token is invalid."""
         return self.get("/user", use_cache=False)

@@ -14,11 +14,15 @@ alembic>=1.13.0
 
 # Analytics
 pandas>=2.2.0
+scipy>=1.13.0
 
 # API and dashboard (Checkpoint 2 initial views)
 fastapi>=0.111.0
 uvicorn[standard]>=0.30.0
 streamlit>=1.36.0
+
+# MCP and local LLM intelligence layer (Checkpoint 3)
+mcp>=1.2.0
 
 # Testing
 pytest>=8.2.0

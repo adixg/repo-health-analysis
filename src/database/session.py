@@ -36,6 +36,8 @@ def init_db() -> None:
         "commits_last_synced_at",
         "contributors_last_synced_at",
         "releases_last_synced_at",
+        "comments_last_synced_at",
+        "documents_last_synced_at",
     )
     with engine.begin() as conn:
         for column in repository_sync_columns:

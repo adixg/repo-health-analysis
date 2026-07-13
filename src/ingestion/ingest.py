@@ -7,8 +7,10 @@ from sqlalchemy.orm import Session
 
 from src.config import Settings, get_settings
 from src.database.models import Repository
+from src.ingestion.comments import ingest_issue_comments, ingest_pull_request_comments
 from src.ingestion.commits import ingest_commits
 from src.ingestion.contributors import ingest_contributors
+from src.ingestion.documents import ingest_documentation
 from src.ingestion.github_client import GitHubClient
 from src.ingestion.issues import ingest_issues
 from src.ingestion.pull_requests import ingest_pull_requests
@@ -24,6 +26,9 @@ class IngestionCounts:
     commits: int = 0
     contributors: int = 0
     releases: int = 0
+    issue_comments: int = 0
+    pull_request_comments: int = 0
+    documents: int = 0
 
 
 def parse_repo_slug(slug: str) -> tuple[str, str]:
@@ -79,4 +84,9 @@ def ingest_repository_data(
         commits=ingest_commits(session, repository, client=client, settings=settings),
         contributors=ingest_contributors(session, repository, client=client, settings=settings),
         releases=ingest_releases(session, repository, client=client, settings=settings),
+        issue_comments=ingest_issue_comments(session, repository, client=client, settings=settings),
+        pull_request_comments=ingest_pull_request_comments(
+            session, repository, client=client, settings=settings
+        ),
+        documents=ingest_documentation(session, repository, client=client, settings=settings),
     )
