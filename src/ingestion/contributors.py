@@ -41,10 +41,16 @@ def ingest_contributors(
     repository: Repository,
     client: GitHubClient | None = None,
     settings: Settings | None = None,
+    *,
+    incremental: bool = True,
 ) -> int:
     client = client or GitHubClient()
     settings = settings or get_settings()
     max_pages = settings.resolved_ingestion_max_pages()
+
+    if incremental and repository.contributors_last_synced_at is not None:
+        logger.info("Skipping contributor re-fetch for %s (already synced)", repository.full_name)
+        return 0
 
     session.execute(delete(Contributor).where(Contributor.repository_id == repository.id))
     session.commit()

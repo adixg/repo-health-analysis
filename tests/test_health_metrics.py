@@ -37,7 +37,10 @@ def test_calculate_pull_request_metrics() -> None:
         ),
     ]
     session = MagicMock()
-    session.scalars.return_value.all.return_value = pull_requests
+    session.scalar.side_effect = [2, 1, 1]
+    session.execute.return_value.all.return_value = [
+        (now - timedelta(days=10), now - timedelta(days=5)),
+    ]
 
     metrics = calculate_pull_request_metrics(session, repository)
     assert metrics.total_prs == 2
@@ -76,7 +79,7 @@ def test_calculate_commit_activity_metrics() -> None:
         ),
     ]
     session = MagicMock()
-    session.scalars.return_value.all.return_value = commits
+    session.scalar.side_effect = [2, 1, 1]
 
     metrics = calculate_commit_activity_metrics(session, repository, now=now)
     assert metrics.total_commits == 2

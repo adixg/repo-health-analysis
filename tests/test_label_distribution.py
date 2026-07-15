@@ -41,7 +41,7 @@ def test_calculate_label_distribution() -> None:
         ),
     ]
     session = MagicMock()
-    session.scalars.return_value.all.return_value = issues
+    session.scalars.return_value.all.return_value = [["bug"], ["enhancement", "help wanted"], []]
 
     distribution = calculate_label_distribution(session, repository, limit=5)
 

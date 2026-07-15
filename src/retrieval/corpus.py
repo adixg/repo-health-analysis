@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from src.config import get_settings
 from src.database.models import (
     Document,
     Issue,
@@ -90,7 +91,14 @@ def build_corpus(session: Session, repository: Repository | None = None) -> list
             )
         )
 
-    for comment in session.scalars(_scope(select(IssueComment), IssueComment)).all():
+    for comment in session.scalars(
+        _scope(
+            select(IssueComment)
+            .order_by(IssueComment.created_at.desc())
+            .limit(get_settings().retrieval_max_comments),
+            IssueComment,
+        )
+    ).all():
         if not comment.body:
             continue
         chunks.append(
@@ -104,7 +112,14 @@ def build_corpus(session: Session, repository: Repository | None = None) -> list
             )
         )
 
-    for comment in session.scalars(_scope(select(PullRequestComment), PullRequestComment)).all():
+    for comment in session.scalars(
+        _scope(
+            select(PullRequestComment)
+            .order_by(PullRequestComment.created_at.desc())
+            .limit(get_settings().retrieval_max_comments),
+            PullRequestComment,
+        )
+    ).all():
         if not comment.body:
             continue
         chunks.append(

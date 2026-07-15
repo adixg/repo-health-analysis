@@ -309,11 +309,11 @@ What evidence supports the repository-health assessment?
 * containerize the system,
 * prepare the final demonstration and report.
 
-**Progress:** substantially complete — issue/PR comments and README ingestion, TF-IDF semantic retrieval, grounded Ollama chat, MCP server tools, exploratory Spearman correlations, Markdown report export, Docker Compose (postgres + ollama + api + dashboard), and expanded unit tests are implemented. See [docs/checkpoint3.md](docs/checkpoint3.md).
+**Progress:** substantially complete — issue/PR comments and README ingestion, TF-IDF semantic retrieval, grounded Ollama chat, MCP server tools, exploratory Spearman correlations, Markdown report export, Docker Compose (postgres + ollama + api + dashboard), verified Q&A evaluation, and evidence artifacts in `docs/`. See [docs/checkpoint3-evidence.md](docs/checkpoint3-evidence.md) and [docs/checkpoint3.md](docs/checkpoint3.md).
 
 ## Current Status
 
-The project is in **Checkpoint 3** with a working ingestion → storage → metrics → retrieval → grounded chat → report export pipeline on real public repositories. Evidence for earlier checkpoints remains in [docs/checkpoint2-evidence.md](docs/checkpoint2-evidence.md).
+The project is in **Checkpoint 3** with a working ingestion → storage → metrics → retrieval → grounded chat → report export pipeline on six public repositories. Checkpoint 2 evidence: [docs/checkpoint2-evidence.md](docs/checkpoint2-evidence.md). Checkpoint 3 evidence and verified questions: [docs/checkpoint3-evidence.md](docs/checkpoint3-evidence.md), [docs/verified_questions_cp3.md](docs/verified_questions_cp3.md).
 
 ### Completed
 
@@ -342,7 +342,7 @@ The project is in **Checkpoint 3** with a working ingestion → storage → metr
 * multi-tab Streamlit dashboard (Overview, Issues, Pull Requests, Commits, Contributors, Releases, Compare),
 * FastAPI service with health, repository, and metrics endpoints,
 * setup script (`scripts/verify_setup.py`) and unit tests (`pytest`, 15 tests),
-* Phase 1 evaluation repos: `octocat/Hello-World`, `fastai/fastai`, `explosion/spaCy`, `psf/requests`,
+* Evaluation repos: `octocat/Hello-World`, `fastai/fastai`, `explosion/spaCy`, `psf/requests`, `scikit-learn/scikit-learn`, `huggingface/datasets`,
 * Checkpoint 2 evidence artifacts in `docs/` (setup output, PostgreSQL screenshot, dashboard PDFs).
 
 **Checkpoint 3**
@@ -356,13 +356,21 @@ The project is in **Checkpoint 3** with a working ingestion → storage → metr
 * dashboard Chat, Correlations, and Reports tabs,
 * FastAPI endpoints for correlations, reports, and grounded chat,
 * Docker Compose stack with Ollama service,
-* expanded unit tests (`pytest`, 30+ tests).
+* expanded unit tests (`pytest`, 33 tests),
+* GitHub pagination/retry hardening and configurable ingestion caps,
+* dashboard performance caching and SQL aggregate metrics,
+* Checkpoint 3 evidence (screenshots, dashboard PDFs, verified Q&A table).
+
+### Known limitations
+
+* GitHub REST API pagination stops at page 100 (~10,000 items per endpoint); `INGESTION_MAX_PAGES` caps dev ingestion.
+* Very large repositories therefore contribute a representative sample, not complete history.
+* Median PR review time is not implemented (requires review-event ingestion).
 
 ### Remaining / optional
 
 * median PR review time (requires review-event ingestion),
-* Checkpoint 3 evidence screenshots and final evaluation write-up,
-* full end-to-end demo with Ollama on all Phase 1 repos.
+* expand verified question set beyond 10 for final evaluation if required by rubric.
 
 ## Getting Started
 
@@ -393,9 +401,11 @@ POSTGRES_PASSWORD=reposense
 POSTGRES_DB=reposense
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
-SAMPLE_REPOS=octocat/Hello-World,fastai/fastai,explosion/spaCy,psf/requests
+SAMPLE_REPOS=octocat/Hello-World,fastai/fastai,explosion/spaCy,psf/requests,scikit-learn/scikit-learn,huggingface/datasets
+INGESTION_MAX_PAGES=15
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=qwen2.5:3b
+OLLAMA_REQUEST_TIMEOUT=300
 ```
 
 Pull the local model (adjust to match your `.env`):
@@ -446,23 +456,28 @@ python -m src.mcp_servers.server
 
 ### Reproducible evidence
 
-See [docs/checkpoint2-evidence.md](docs/checkpoint2-evidence.md) for Checkpoint 2 reproduction steps, screenshots, SQL queries, and dashboard PDFs. Checkpoint 3 architecture and verification steps are in [docs/checkpoint3.md](docs/checkpoint3.md).
+See [docs/checkpoint2-evidence.md](docs/checkpoint2-evidence.md) for Checkpoint 2 reproduction steps. For Checkpoint 3, see [docs/checkpoint3-evidence.md](docs/checkpoint3-evidence.md) and [docs/verified_questions_cp3.md](docs/verified_questions_cp3.md). Architecture notes: [docs/checkpoint3.md](docs/checkpoint3.md).
 
 Evidence artifacts in `docs/`:
 
 | Artifact | Description |
 |----------|-------------|
-| `verify_script_output.png` | Output from `python scripts/verify_setup.py` |
-| `postgresql_output.png` | SQL query results from pgAdmin |
-| `pytest_result.png` | Output from `pytest` |
-| `dashboard_output_overview.pdf` | Dashboard overview tab |
-| `dashboard_output_issues.pdf` | Issue metrics tab |
-| `dashboard_output_pull_requests.pdf` | Pull-request metrics tab |
-| `dashboard_output_commits.pdf` | Commit activity tab |
-| `dashboard_output_contributors.pdf` | Contributor metrics tab |
-| `dashboard_output_releases.pdf` | Release metrics tab |
-| `dashboard_output_compare.pdf` | Cross-repository comparison tab |
-| `dashboard_output.pdf` | Combined dashboard export |
+| `verify_script_output_cp3.png` | CP3 setup/ingestion output (six repos) |
+| `postgresql_output_cp3.png` | SQL counts including comments and documents |
+| `pytest_result_cp3.png` | CP3 test run (33 tests) |
+| `dashboard_output_chat_cp3.pdf` | Grounded Chat tab |
+| `dashboard_output_correlations_cp3.pdf` | Correlations tab |
+| `dashboard_output_reports_cp3.pdf` | Reports tab |
+| `verify_script_output.png` | CP2 setup output |
+| `postgresql_output.png` | CP2 PostgreSQL screenshot |
+| `pytest_result.png` | CP2 pytest output |
+| `dashboard_output_overview.pdf` | CP2 dashboard overview |
+| `dashboard_output_issues.pdf` | CP2 issue metrics tab |
+| `dashboard_output_pull_requests.pdf` | CP2 pull-request tab |
+| `dashboard_output_commits.pdf` | CP2 commit activity tab |
+| `dashboard_output_contributors.pdf` | CP2 contributor tab |
+| `dashboard_output_releases.pdf` | CP2 release tab |
+| `dashboard_output_compare.pdf` | CP2 comparison tab |
 
 After a successful run of `verify_setup.py`, you should see:
 
@@ -480,7 +495,9 @@ SELECT
   (SELECT COUNT(*) FROM pull_requests p WHERE p.repository_id = r.id) AS pull_requests,
   (SELECT COUNT(*) FROM commits c WHERE c.repository_id = r.id) AS commits,
   (SELECT COUNT(*) FROM contributors c WHERE c.repository_id = r.id) AS contributors,
-  (SELECT COUNT(*) FROM releases rel WHERE rel.repository_id = r.id) AS releases
+  (SELECT COUNT(*) FROM releases rel WHERE rel.repository_id = r.id) AS releases,
+  (SELECT COUNT(*) FROM issue_comments ic WHERE ic.repository_id = r.id) AS issue_comments,
+  (SELECT COUNT(*) FROM documents d WHERE d.repository_id = r.id) AS documents
 FROM repositories r
 ORDER BY r.full_name;
 ```
@@ -509,7 +526,7 @@ repo-health-analysis/
 │   ├── mcp_servers/        # FastMCP tool server (Checkpoint 3)
 │   ├── reporting/          # Markdown health report export (Checkpoint 3)
 │   ├── api/                # FastAPI service
-│   └── dashboard/          # Streamlit app
+│   └── dashboard/          # Streamlit app + cached data loaders
 ├── tests/
 ├── data/                   # local API cache (gitignored contents)
 ├── docs/                   # checkpoint evidence, screenshots, dashboard PDFs

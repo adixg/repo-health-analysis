@@ -13,6 +13,7 @@ import logging
 from dataclasses import dataclass, field
 
 import httpx
+from httpx import TimeoutException
 from sqlalchemy.orm import Session
 
 from src.config import Settings, get_settings
@@ -58,9 +59,15 @@ def build_grounded_prompt(
     chunks: list[EvidenceChunk],
     *,
     metrics_context: str | None = None,
+    max_evidence_chars: int = 800,
 ) -> str:
     """Assemble the user-turn prompt from evidence and optional metric context."""
-    sections = [f"Question: {question}", "", "Retrieved evidence:", format_evidence(chunks)]
+    sections = [
+        f"Question: {question}",
+        "",
+        "Retrieved evidence:",
+        format_evidence(chunks, max_chars=max_evidence_chars),
+    ]
     if metrics_context:
         sections += ["", "Precomputed metrics:", metrics_context]
     sections += ["", "Answer using only the context above and cite evidence by number."]
@@ -83,12 +90,52 @@ class OllamaClient:
                 {"role": "user", "content": user_prompt},
             ],
             "stream": False,
+            "options": {
+                "num_predict": self.settings.ollama_num_predict,
+                "temperature": 0.2,
+            },
         }
-        with httpx.Client(timeout=self.settings.ollama_request_timeout) as client:
-            response = client.post(f"{self.base_url}/api/chat", json=payload)
-            response.raise_for_status()
+        timeout = httpx.Timeout(
+            self.settings.ollama_request_timeout,
+            connect=10.0,
+        )
+        with httpx.Client(timeout=timeout) as client:
+            try:
+                response = client.post(f"{self.base_url}/api/chat", json=payload)
+                response.raise_for_status()
+            except TimeoutException as exc:
+                raise TimeoutError(
+                    f"Ollama did not finish within {self.settings.ollama_request_timeout:.0f}s "
+                    f"using model {self.model!r}."
+                ) from exc
             data = response.json()
         return (data.get("message") or {}).get("content", "")
+
+
+def check_ollama_available(settings: Settings | None = None) -> None:
+    """Raise a clear error if Ollama is unreachable or the model is missing."""
+    settings = settings or get_settings()
+    base_url = settings.ollama_base_url.rstrip("/")
+    timeout = httpx.Timeout(10.0, connect=5.0)
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            response = client.get(f"{base_url}/api/tags")
+            response.raise_for_status()
+            models = {item.get("name") for item in response.json().get("models", [])}
+    except httpx.ConnectError as exc:
+        raise ConnectionError(
+            f"Cannot connect to Ollama at {base_url}. Start it with `ollama serve`."
+        ) from exc
+    except TimeoutException as exc:
+        raise TimeoutError(
+            f"Ollama at {base_url} did not respond within 10 seconds."
+        ) from exc
+
+    if settings.ollama_model not in models:
+        raise ValueError(
+            f"Model {settings.ollama_model!r} is not available. "
+            f"Run `ollama pull {settings.ollama_model}`."
+        )
 
 
 class GroundedChatAgent:
@@ -116,6 +163,11 @@ class GroundedChatAgent:
     ) -> GroundedAnswer:
         k = top_k or self.settings.retrieval_top_k
         chunks = self.retriever.search(question, top_k=k)
-        prompt = build_grounded_prompt(question, chunks, metrics_context=metrics_context)
+        prompt = build_grounded_prompt(
+            question,
+            chunks,
+            metrics_context=metrics_context,
+            max_evidence_chars=self.settings.retrieval_evidence_max_chars,
+        )
         text = self.client.chat(GROUNDING_SYSTEM_PROMPT, prompt)
         return GroundedAnswer(question=question, answer=text, evidence=chunks)

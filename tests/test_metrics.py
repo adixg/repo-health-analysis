@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 from src.analytics.metrics import calculate_issue_metrics
-from src.database.models import Issue, Repository
+from src.database.models import Repository
 
 
 def test_calculate_issue_metrics() -> None:
@@ -13,39 +13,12 @@ def test_calculate_issue_metrics() -> None:
         name="repo",
     )
     now = datetime.now(UTC)
-    issues = [
-        Issue(
-            id=1,
-            repository_id=1,
-            number=1,
-            title="open recent",
-            state="open",
-            created_at=now - timedelta(days=10),
-            updated_at=now,
-        ),
-        Issue(
-            id=2,
-            repository_id=1,
-            number=2,
-            title="open stale",
-            state="open",
-            created_at=now - timedelta(days=120),
-            updated_at=now,
-        ),
-        Issue(
-            id=3,
-            repository_id=1,
-            number=3,
-            title="closed",
-            state="closed",
-            created_at=now - timedelta(days=20),
-            closed_at=now - timedelta(days=10),
-            updated_at=now,
-        ),
-    ]
 
     session = MagicMock()
-    session.scalars.return_value.all.return_value = issues
+    session.scalar.side_effect = [3, 2, 1, 1]
+    session.execute.return_value.all.return_value = [
+        (now - timedelta(days=20), now - timedelta(days=10)),
+    ]
 
     metrics = calculate_issue_metrics(session, repository, stale_days=90)
 

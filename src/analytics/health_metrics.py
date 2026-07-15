@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from statistics import median
 
 import pandas as pd
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.database.models import Commit, Contributor, PullRequest, Release, Repository
@@ -69,21 +69,45 @@ def _merge_days(pull_request: PullRequest) -> float | None:
 
 
 def calculate_pull_request_metrics(session: Session, repository: Repository) -> PullRequestMetrics:
-    pull_requests = session.scalars(
-        select(PullRequest).where(PullRequest.repository_id == repository.id)
+    repo_filter = PullRequest.repository_id == repository.id
+    total = session.scalar(select(func.count()).select_from(PullRequest).where(repo_filter)) or 0
+    open_prs = (
+        session.scalar(
+            select(func.count())
+            .select_from(PullRequest)
+            .where(repo_filter, PullRequest.state == "open")
+        )
+        or 0
+    )
+    merged_prs = (
+        session.scalar(
+            select(func.count())
+            .select_from(PullRequest)
+            .where(repo_filter, PullRequest.merged.is_(True))
+        )
+        or 0
+    )
+    merge_rate = (merged_prs / total) if total else 0.0
+
+    merged_rows = session.execute(
+        select(PullRequest.created_at, PullRequest.merged_at).where(
+            repo_filter,
+            PullRequest.merged.is_(True),
+            PullRequest.merged_at.isnot(None),
+        )
     ).all()
-    open_prs = [pr for pr in pull_requests if pr.state == "open"]
-    merged_prs = [pr for pr in pull_requests if pr.merged]
-    total = len(pull_requests)
-    merge_rate = (len(merged_prs) / total) if total else 0.0
-    merge_days = [days for pr in merged_prs if (days := _merge_days(pr)) is not None]
+    merge_days = [
+        (merged_at - created_at).total_seconds() / 86400
+        for created_at, merged_at in merged_rows
+        if created_at is not None and merged_at is not None
+    ]
     median_merge = median(merge_days) if merge_days else None
 
     return PullRequestMetrics(
         full_name=repository.full_name,
         total_prs=total,
-        open_prs=len(open_prs),
-        merged_prs=len(merged_prs),
+        open_prs=open_prs,
+        merged_prs=merged_prs,
         merge_rate=round(merge_rate, 3),
         median_merge_days=round(median_merge, 1) if median_merge is not None else None,
     )
@@ -98,15 +122,32 @@ def calculate_commit_activity_metrics(
     now = now or datetime.now(UTC)
     six_months_ago = now - timedelta(days=183)
     twelve_months_ago = now - timedelta(days=365)
+    repo_filter = Commit.repository_id == repository.id
 
-    commits = session.scalars(
-        select(Commit).where(Commit.repository_id == repository.id)
-    ).all()
-    last_6 = [c for c in commits if c.committed_at >= six_months_ago]
-    prior_6 = [c for c in commits if twelve_months_ago <= c.committed_at < six_months_ago]
+    total = session.scalar(select(func.count()).select_from(Commit).where(repo_filter)) or 0
+    last_6 = (
+        session.scalar(
+            select(func.count())
+            .select_from(Commit)
+            .where(repo_filter, Commit.committed_at >= six_months_ago)
+        )
+        or 0
+    )
+    prior_6 = (
+        session.scalar(
+            select(func.count())
+            .select_from(Commit)
+            .where(
+                repo_filter,
+                Commit.committed_at >= twelve_months_ago,
+                Commit.committed_at < six_months_ago,
+            )
+        )
+        or 0
+    )
 
     if prior_6:
-        change_pct = ((len(last_6) - len(prior_6)) / len(prior_6)) * 100
+        change_pct = ((last_6 - prior_6) / prior_6) * 100
     elif last_6:
         change_pct = 100.0
     else:
@@ -114,9 +155,9 @@ def calculate_commit_activity_metrics(
 
     return CommitActivityMetrics(
         full_name=repository.full_name,
-        total_commits=len(commits),
-        commits_last_6_months=len(last_6),
-        commits_prior_6_months=len(prior_6),
+        total_commits=total,
+        commits_last_6_months=last_6,
+        commits_prior_6_months=prior_6,
         activity_change_pct=round(change_pct, 1) if change_pct is not None else None,
     )
 

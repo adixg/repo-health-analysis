@@ -45,10 +45,16 @@ def ingest_pull_requests(
     repository: Repository,
     client: GitHubClient | None = None,
     settings: Settings | None = None,
+    *,
+    incremental: bool = True,
 ) -> int:
     client = client or GitHubClient()
     settings = settings or get_settings()
     max_pages = settings.resolved_ingestion_max_pages()
+
+    if incremental and repository.pulls_last_synced_at is not None:
+        logger.info("Skipping PR re-fetch for %s (already synced)", repository.full_name)
+        return 0
 
     ingested_count = 0
     for payload in client.list_pull_requests(

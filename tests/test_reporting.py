@@ -16,7 +16,8 @@ def test_generate_repository_report_renders_sections() -> None:
         language="Python",
     )
     session = MagicMock()
-    session.scalar.return_value = repository
+    session.scalar.side_effect = [repository, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    session.execute.return_value.all.return_value = []
     session.scalars.return_value.all.return_value = []
 
     report = generate_repository_report(session, "psf/requests")

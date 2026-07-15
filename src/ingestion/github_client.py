@@ -14,6 +14,11 @@ from src.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
+# GitHub REST API rejects page numbers above 100 (max 10,000 items at per_page=100).
+GITHUB_MAX_PAGE = 100
+RETRYABLE_STATUS_CODES = {429, 502, 503, 504}
+MAX_REQUEST_RETRIES = 5
+
 
 class GitHubClient:
     """Thin wrapper around the GitHub REST API with optional response caching."""
@@ -23,6 +28,17 @@ class GitHubClient:
         self.base_url = self.settings.github_api_base_url.rstrip("/")
         self.cache_dir = Path(self.settings.cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self._http: httpx.Client | None = None
+
+    def close(self) -> None:
+        if self._http is not None:
+            self._http.close()
+            self._http = None
+
+    def _client(self) -> httpx.Client:
+        if self._http is None:
+            self._http = httpx.Client(headers=self._headers, timeout=30.0)
+        return self._http
 
     @property
     def _headers(self) -> dict[str, str]:
@@ -39,6 +55,60 @@ class GitHubClient:
         digest = sha256(key.encode()).hexdigest()
         return self.cache_dir / f"{digest}.json"
 
+    def _request(
+        self,
+        url: str,
+        *,
+        params: dict[str, Any] | None = None,
+    ) -> httpx.Response:
+        client = self._client()
+        last_response: httpx.Response | None = None
+
+        for attempt in range(MAX_REQUEST_RETRIES):
+            try:
+                response = client.get(url, params=params)
+            except httpx.TransportError as exc:
+                if attempt + 1 >= MAX_REQUEST_RETRIES:
+                    raise
+                wait_seconds = 2**attempt
+                logger.warning(
+                    "GitHub request failed (%s); retrying in %ss (attempt %s/%s)",
+                    exc,
+                    wait_seconds,
+                    attempt + 1,
+                    MAX_REQUEST_RETRIES,
+                )
+                time.sleep(wait_seconds)
+                continue
+
+            if response.status_code == 403 and "rate limit" in response.text.lower():
+                reset = response.headers.get("X-RateLimit-Reset")
+                if reset:
+                    wait_seconds = max(int(reset) - int(time.time()), 0) + 1
+                    logger.warning("Rate limited; sleeping %s seconds", wait_seconds)
+                    time.sleep(wait_seconds)
+                    continue
+
+            if response.status_code in RETRYABLE_STATUS_CODES and attempt + 1 < MAX_REQUEST_RETRIES:
+                wait_seconds = 2**attempt
+                logger.warning(
+                    "GitHub returned %s for %s; retrying in %ss (attempt %s/%s)",
+                    response.status_code,
+                    url,
+                    wait_seconds,
+                    attempt + 1,
+                    MAX_REQUEST_RETRIES,
+                )
+                time.sleep(wait_seconds)
+                last_response = response
+                continue
+
+            return response
+
+        if last_response is not None:
+            return last_response
+        raise RuntimeError(f"GitHub request failed after {MAX_REQUEST_RETRIES} attempts: {url}")
+
     def get(
         self,
         path: str,
@@ -52,17 +122,9 @@ class GitHubClient:
             return json.loads(cache_file.read_text(encoding="utf-8"))
 
         url = path if path.startswith("http") else f"{self.base_url}/{path.lstrip('/')}"
-        with httpx.Client(headers=self._headers, timeout=30.0) as client:
-            response = client.get(url, params=params)
-            if response.status_code == 403 and "rate limit" in response.text.lower():
-                reset = response.headers.get("X-RateLimit-Reset")
-                if reset:
-                    wait_seconds = max(int(reset) - int(time.time()), 0) + 1
-                    logger.warning("Rate limited; sleeping %s seconds", wait_seconds)
-                    time.sleep(wait_seconds)
-                    response = client.get(url, params=params)
-            response.raise_for_status()
-            payload = response.json()
+        response = self._request(url, params=params)
+        response.raise_for_status()
+        payload = response.json()
 
         cache_file.write_text(json.dumps(payload), encoding="utf-8")
         return payload
@@ -76,14 +138,33 @@ class GitHubClient:
         max_pages: int | None = None,
     ) -> Iterator[Any]:
         page = 1
+        page_limit = min(max_pages, GITHUB_MAX_PAGE) if max_pages is not None else GITHUB_MAX_PAGE
         while True:
-            if max_pages is not None and page > max_pages:
+            if page > page_limit:
+                if max_pages is None and page > GITHUB_MAX_PAGE:
+                    logger.warning(
+                        "Reached GitHub pagination limit (%s pages) for %s; "
+                        "remaining items are skipped. Use incremental sync (since=) "
+                        "or per-resource endpoints for large repositories.",
+                        GITHUB_MAX_PAGE,
+                        path,
+                    )
                 break
-            batch = self.get(
-                path,
-                params={**(params or {}), "per_page": 100, "page": page},
-                use_cache=use_cache,
-            )
+            try:
+                batch = self.get(
+                    path,
+                    params={**(params or {}), "per_page": 100, "page": page},
+                    use_cache=use_cache,
+                )
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 422:
+                    logger.warning(
+                        "GitHub pagination rejected page %s for %s; stopping early.",
+                        page,
+                        path,
+                    )
+                    break
+                raise
             if not batch:
                 break
             yield from batch

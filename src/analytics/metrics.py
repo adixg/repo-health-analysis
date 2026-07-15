@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from statistics import median
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.config import get_settings
@@ -81,31 +81,58 @@ def calculate_issue_metrics(
 ) -> IssueMetrics:
     stale_days = stale_days or get_settings().stale_issue_days
     cutoff = datetime.now(UTC) - timedelta(days=stale_days)
+    repo_filter = Issue.repository_id == repository.id
 
-    issues = session.scalars(
-        select(Issue).where(Issue.repository_id == repository.id)
-    ).all()
-    open_issues = [issue for issue in issues if issue.state == "open"]
-    closed_issues = [issue for issue in issues if issue.state == "closed"]
-    stale_open = [issue for issue in open_issues if issue.created_at <= cutoff]
+    total = session.scalar(select(func.count()).select_from(Issue).where(repo_filter)) or 0
+    open_count = (
+        session.scalar(
+            select(func.count()).select_from(Issue).where(repo_filter, Issue.state == "open")
+        )
+        or 0
+    )
+    closed_count = (
+        session.scalar(
+            select(func.count()).select_from(Issue).where(repo_filter, Issue.state == "closed")
+        )
+        or 0
+    )
+    stale_open = (
+        session.scalar(
+            select(func.count())
+            .select_from(Issue)
+            .where(
+                repo_filter,
+                Issue.state == "open",
+                Issue.created_at <= cutoff,
+            )
+        )
+        or 0
+    )
 
-    total = len(issues)
-    closed_count = len(closed_issues)
     closure_rate = (closed_count / total) if total else 0.0
-    stale_pct = (len(stale_open) / len(open_issues)) if open_issues else 0.0
+    stale_pct = (stale_open / open_count) if open_count else 0.0
 
+    closed_rows = session.execute(
+        select(Issue.created_at, Issue.closed_at).where(
+            repo_filter,
+            Issue.state == "closed",
+            Issue.closed_at.isnot(None),
+        )
+    ).all()
     resolution_days = [
-        days for issue in closed_issues if (days := _resolution_days(issue)) is not None
+        (closed_at - created_at).total_seconds() / 86400
+        for created_at, closed_at in closed_rows
+        if created_at is not None and closed_at is not None
     ]
     median_resolution = median(resolution_days) if resolution_days else None
 
     return IssueMetrics(
         full_name=repository.full_name,
         total_issues=total,
-        open_issues=len(open_issues),
+        open_issues=open_count,
         closed_issues=closed_count,
         closure_rate=round(closure_rate, 3),
-        stale_open_issues=len(stale_open),
+        stale_open_issues=stale_open,
         stale_issue_pct=round(stale_pct, 3),
         median_resolution_days=round(median_resolution, 1) if median_resolution is not None else None,
     )
@@ -147,19 +174,20 @@ def calculate_label_distribution(
     limit: int = 15,
 ) -> LabelDistribution:
     """Count how often each issue label appears for a repository."""
-    issues = session.scalars(
-        select(Issue).where(Issue.repository_id == repository.id)
+    label_rows = session.scalars(
+        select(Issue.labels).where(Issue.repository_id == repository.id)
     ).all()
 
     label_counts: Counter[str] = Counter()
     labeled_issues = 0
-    for issue in issues:
-        labels = issue.labels or []
-        if not labels:
+    for labels in label_rows:
+        normalized = labels or []
+        if not normalized:
             continue
         labeled_issues += 1
-        label_counts.update(labels)
+        label_counts.update(normalized)
 
+    total_issues = len(label_rows)
     total_assignments = sum(label_counts.values())
     top_labels = [
         LabelCount(
@@ -172,9 +200,9 @@ def calculate_label_distribution(
 
     return LabelDistribution(
         full_name=repository.full_name,
-        total_issues=len(issues),
+        total_issues=total_issues,
         labeled_issues=labeled_issues,
-        unlabeled_issues=len(issues) - labeled_issues,
+        unlabeled_issues=total_issues - labeled_issues,
         top_labels=top_labels,
     )
 
